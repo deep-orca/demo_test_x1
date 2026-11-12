@@ -16,28 +16,16 @@ services:
       timeout: 5s
       retries: 5
 
-  # rabbitmq:
-  #   image: rabbitmq:3-management-alpine
-  #   container_name: payments_rabbitmq
-  #   ports:
-  #     - "5672:5672"
-  #     - "15672:15672"
-  #   healthcheck:
-  #     test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-  #     interval: 5s
-  #     timeout: 5s
-  #     retries: 5
-
   rabbitmq:
     build:
       context: .
       dockerfile: rmq.Dockerfile
-    container_name: rabbitmq-delayed
-    hostname: rabbitmq-node1  # Фиксированный hostname обязателен для сохранения данных Mnesia
+    container_name: payments_rabbitmq
+    hostname: rabbitmq-node1
     restart: unless-stopped
     ports:
-      - "5672:5672"    # AMQP порт для Python-приложения
-      - "15672:15672"  # Веб-интерфейс (Management UI)
+      - "5672:5672"
+      - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
@@ -55,12 +43,9 @@ services:
     command: "uvicorn tst.app:app --host 0.0.0.0 --port 8000"
     ports:
       - "8000:8000"
-    # volumes:
-    #   - ./alembic/versions:/app/alembic/versions
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/payments_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      WEBHOOK_SECRET: my_super_secret_key_123
     depends_on:
       postgres:
         condition: service_healthy
@@ -72,8 +57,11 @@ services:
     container_name: order_consumer
     command: python -m tst.consumer_fs
     environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/payments_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
     depends_on:
+      postgres:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 

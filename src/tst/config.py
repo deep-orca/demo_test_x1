@@ -5,4 +5,3 @@ DATABASE_URL = os.getenv(
 )
 RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
 QUEUE_NAME = "payment_events"
-WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "my_super_secret_key_123")

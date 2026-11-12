@@ -14,7 +14,7 @@ async def outbox_worker():
     await broker.declare_queue(dlq_queue)  # pyright: ignore[reportUnusedCallResult]
 
     while True:
-        print("[Outbox] Tick...")
+        # print("[Outbox] Tick...")
         try:
             async with async_session() as db:
                 stmt = (
