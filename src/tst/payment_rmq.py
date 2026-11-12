@@ -1,3 +1,4 @@
+from typing import Annotated
 import uuid
 import hashlib
 import json
@@ -12,18 +13,16 @@ from typing_extensions import Any
 from tst.ioc import get_db
 from tst.models import PaymentModel, OutboxEventModel
 
-router = APIRouter()
+router = APIRouter(prefix="/api/v1")
 
 
 class PaymentCreate(BaseModel):
     order_id: str = Field(..., description="ID заказа")
     amount: float = Field(..., gt=0, description="Сумма платежа")
     currency: str = Field(default="RUB", description="Валюта")
-
-
-# class PaymentWebhook(BaseModel):
-#     payment_id: str
-#     status: PaymentStatus
+    metadata: str = Field("", description="Метаданные")
+    description: str = Field(default="", description="Описание")
+    webhook: str = Field(default="http://0.0.0.0/", description="Webhook URL")
 
 
 def get_payload_hash(payload: PaymentCreate) -> str:
@@ -31,17 +30,11 @@ def get_payload_hash(payload: PaymentCreate) -> str:
     return hashlib.sha256(data_str.encode()).hexdigest()
 
 
-def format_response(
-    payment: PaymentModel, is_duplicate: bool = False
-) -> dict[str, Any]:
+def format_response(payment: PaymentModel) -> dict[str, Any]:
     return {
         "payment_id": payment.id,
-        "order_id": payment.order_id,
-        "amount": payment.amount,
-        "currency": payment.currency,
         "status": payment.status,
-        "confirmation_url": f"https://fake-gateway.local{payment.id}",
-        "is_duplicate": is_duplicate,
+        "created_at": payment.created_at,
     }
 
 
@@ -49,8 +42,8 @@ def format_response(
 async def create_payment(
     payment: PaymentCreate,
     response: Response,
-    idempotency_key: str = Header(...),
-    db: AsyncSession = Depends(get_db),
+    idempotency_key: Annotated[str, Header()],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
     current_hash = get_payload_hash(payment)
     stmt = select(PaymentModel).where(PaymentModel.idempotency_key == idempotency_key)
@@ -61,8 +54,8 @@ async def create_payment(
             raise HTTPException(
                 status_code=422, detail="Ключ уже использовался с другими параметрами"
             )
-        response.status_code = status.HTTP_200_OK
-        return format_response(existing, is_duplicate=True)
+        response.status_code = status.HTTP_202_ACCEPTED
+        return format_response(existing)
 
     new_payment = PaymentModel(
         id=str(uuid.uuid4()),
@@ -71,6 +64,9 @@ async def create_payment(
         order_id=payment.order_id,
         amount=payment.amount,
         currency=payment.currency,
+        description=payment.description,
+        metajson=payment.metadata,
+        webhook=payment.webhook,
     )
     db.add(new_payment)
 
@@ -94,42 +90,24 @@ async def create_payment(
 
         await db.flush()
         await db.commit()
-        response.status_code = status.HTTP_201_CREATED
-        return format_response(new_payment, is_duplicate=False)
+        response.status_code = status.HTTP_202_ACCEPTED
+        return format_response(new_payment)
     except IntegrityError:
         await db.rollback()
         existing = (await db.execute(stmt)).scalar_one()
-        response.status_code = status.HTTP_200_OK
-        return format_response(existing, is_duplicate=True)
+        response.status_code = status.HTTP_202_ACCEPTED
+        return format_response(existing)
 
 
-# @router.get("/payments/{payment_id}")
-# async def get_payment_status(payment_id: str, db: AsyncSession = Depends(get_db)):
-#     stmt = select(PaymentModel).where(PaymentModel.id == payment_id)
-#     payment = (await db.execute(stmt)).scalar_one_or_none()
-#
-#     if not payment:
-#         raise HTTPException(status_code=404, detail="Платеж не найден")
-#     return format_response(payment)
+@router.get("/payments/{payment_id}")
+async def get_payment_status(
+    payment_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    stmt = select(PaymentModel).where(PaymentModel.id == payment_id)
+    payment = (await db.execute(stmt)).scalar_one_or_none()
 
+    if not payment:
+        raise HTTPException(status_code=404, detail="Платеж не найден")
 
-# @router.post("/payments/webhook")
-# async def payment_webhook(
-#     payload: PaymentWebhook,
-#     x_webhook_secret: str = Header(None),
-#     db: AsyncSession = Depends(get_db),
-# ):
-#     if x_webhook_secret != WEBHOOK_SECRET:
-#         raise HTTPException(status_code=403, detail="Неверный секретный ключ")
-#
-#     async with db.begin():
-#         stmt = (
-#             select(PaymentModel)
-#             .where(PaymentModel.id == payload.payment_id)
-#             .with_for_update()
-#         )
-#     return {
-#         "message": "Статус обновлен, событие поставлено в очередь на отправку",
-#         "payment_id": payload.payment_id,
-#         "new_status": payload.status.value,
-#     }
+    return payment

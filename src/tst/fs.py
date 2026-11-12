@@ -27,7 +27,7 @@ delayed_exchange = RabbitExchange(
 )
 
 main_queue = RabbitQueue(
-    name="main_queue",
+    name="payments.new",
     durable=True,
     routing_key="task",
 )

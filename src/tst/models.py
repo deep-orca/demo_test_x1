@@ -27,7 +27,18 @@ class PaymentModel(Base):
     order_id: Mapped[str] = mapped_column(String, nullable=False)
     amount: Mapped[float] = mapped_column(Float, nullable=False)
     currency: Mapped[str] = mapped_column(String, default="RUB")
+    description: Mapped[str] = mapped_column(String, default="")
+    metajson: Mapped[str] = mapped_column(String, default="")
+    webhook: Mapped[str] = mapped_column(String, default="")
     status: Mapped[str] = mapped_column(String, default=PaymentStatus.PENDING.value)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    processed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=True,
+    )
 
 
 @final

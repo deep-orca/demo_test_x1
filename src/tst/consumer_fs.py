@@ -1,13 +1,13 @@
 import asyncio
+from datetime import datetime, timezone
 import json
 import random
 import uuid
 
+import aiohttp
 from faststream import Logger
 from sqlalchemy import select
 from tst.fs import TaskPayload, app, broker, delayed_exchange, dlq_queue, main_queue
-
-
 from tst.ioc import async_session
 from tst.models import OutboxEventModel, PaymentModel, PaymentStatus
 
@@ -18,7 +18,6 @@ async def handle_task(data: TaskPayload, logger: Logger) -> None:
 
     if event_data["event"] == "payment.pending":
         async with async_session() as db:
-
             stmt = (
                 select(PaymentModel)
                 .where(PaymentModel.id == event_data["payment_id"])
@@ -39,8 +38,10 @@ async def handle_task(data: TaskPayload, logger: Logger) -> None:
 
             new_event_data = event_data.copy()
             new_event_data["event"] = "payment.webhook"
+            new_event_data["webhook"] = payment.webhook
 
             payment.status = PaymentStatus.SUCCEEDED.value
+            payment.processed_at = datetime.now(timezone.utc)
 
             outbox_event = OutboxEventModel(
                 id=str(uuid.uuid4()),
@@ -52,6 +53,16 @@ async def handle_task(data: TaskPayload, logger: Logger) -> None:
 
             await db.flush()
             await db.commit()
+    elif event_data["event"] == "payment.pending":
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://api.example.com/data") as response:
+                print("Status:", response.status)
+                print("Content-type:", response.headers["content-type"])
+
+                response.raise_for_status()
+
+                html = await response.text()
+                print("Body:", html[:100], "...")
 
     logger.info(
         f"[SUCCESS] Задача #{data.task_id}|{event_data["event"]}|{event_data["payment_id"]} ({data.action}) успешно выполнена!"
