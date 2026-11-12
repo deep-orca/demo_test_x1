@@ -11,9 +11,10 @@ from sqlalchemy.exc import IntegrityError
 from typing_extensions import Any
 
 from tst.ioc import get_db
+from tst.key import verify_api_key
 from tst.models import PaymentModel, OutboxEventModel
 
-router = APIRouter(prefix="/api/v1")
+router = APIRouter(prefix="/api/v1", dependencies=[Depends(verify_api_key)])
 
 
 class PaymentCreate(BaseModel):
