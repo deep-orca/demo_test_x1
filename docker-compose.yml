@@ -1,0 +1,60 @@
+services:
+  postgres:
+    image: postgres:18.3-alpine
+    container_name: payments_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: payments_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d payments_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: payments_rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  payment_service:
+    build: .
+    container_name: payment_api
+    command: "uvicorn tst.payment_rmq:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8000:8000"
+    # volumes:
+    #   - ./alembic/versions:/app/alembic/versions
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/payments_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      WEBHOOK_SECRET: my_super_secret_key_123
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  order_service_consumer:
+    build: .
+    container_name: order_consumer
+    command: python -m tst.order_consumer
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  pg_data:
