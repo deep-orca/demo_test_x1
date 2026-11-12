@@ -9,7 +9,7 @@ from faststream.rabbit.message import RabbitMessage
 
 from tst.config import RABBITMQ_URL
 
-MAX_RETRIES = 5
+MAX_RETRIES = 3
 BASE_DELAY_MS = 1000  # 1 секунда
 MAX_DELAY_MS = 60000  # 60 секунд
 
@@ -46,7 +46,6 @@ class DelayedRetryMiddleware(BaseMiddleware):
         msg: RabbitMessage,
     ):
         try:
-            # Пытаемся выполнить хендлер подписчика
             return await call_next(msg)
         except Exception as exc:
             headers = dict(msg.headers) if msg.headers else {}
@@ -61,7 +60,6 @@ class DelayedRetryMiddleware(BaseMiddleware):
                     f"[RETRY] Ошибка: {exc}. Попытка {retry_count + 1}/{MAX_RETRIES} через {delay_ms} мс..."
                 )
 
-                # Публикуем сырое тело сообщения обратно в delayed_exchange
                 await broker.publish(  # pyright: ignore[reportUnusedCallResult]
                     message=msg.body,
                     exchange=delayed_exchange,
@@ -85,12 +83,10 @@ class DelayedRetryMiddleware(BaseMiddleware):
             return None
 
 
-# 3. Инициализируем брокер с подключенным Middleware
 broker = RabbitBroker(RABBITMQ_URL, middlewares=[DelayedRetryMiddleware])
 app = FastStream(broker)
 
 
-# 4. Схема данных (Pydantic) и чистый бизнес-обработчик
 class TaskPayload(BaseModel):
     task_id: str
     action: str
