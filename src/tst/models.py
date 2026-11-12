@@ -1,5 +1,6 @@
 from enum import Enum
 from datetime import datetime, timezone
+from typing import final
 from sqlalchemy import String, Float, Boolean, DateTime
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -14,11 +15,14 @@ class PaymentStatus(str, Enum):
     CANCELED = "canceled"
 
 
+@final
 class PaymentModel(Base):
     __tablename__ = "payments"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    idempotency_key: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(
+        String, unique=True, index=True, nullable=False
+    )
     request_hash: Mapped[str] = mapped_column(String, nullable=False)
     order_id: Mapped[str] = mapped_column(String, nullable=False)
     amount: Mapped[float] = mapped_column(Float, nullable=False)
@@ -26,6 +30,7 @@ class PaymentModel(Base):
     status: Mapped[str] = mapped_column(String, default=PaymentStatus.PENDING.value)
 
 
+@final
 class OutboxEventModel(Base):
     __tablename__ = "outbox_events"
 
@@ -33,5 +38,6 @@ class OutboxEventModel(Base):
     event_type: Mapped[str] = mapped_column(String, nullable=False)
     payload: Mapped[str] = mapped_column(String, nullable=False)
     processed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )

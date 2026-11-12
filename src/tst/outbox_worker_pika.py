@@ -17,16 +17,15 @@ async def outbox_worker():
             async with async_session() as db:
                 stmt = (
                     select(OutboxEventModel)
-                    .where(OutboxEventModel.processed == False)
+                    .where(OutboxEventModel.processed == False)  # noqa: E712
                     .limit(10)
+                    .with_for_update()
                 )
-                events = (await db.execute(stmt)).scalars().all()
-
-                if events:
+                if events := (await db.execute(stmt)).scalars().all():
                     connection = await aio_pika.connect_robust(RABBITMQ_URL)
                     async with connection:
                         channel = await connection.channel()
-                        await channel.declare_queue(QUEUE_NAME, durable=True)
+                        _ = await channel.declare_queue(QUEUE_NAME, durable=True)
 
                         for event in events:
                             message = aio_pika.Message(
@@ -34,7 +33,7 @@ async def outbox_worker():
                                 delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
                                 message_id=event.id,
                             )
-                            await channel.default_exchange.publish(
+                            _ = await channel.default_exchange.publish(
                                 message, routing_key=QUEUE_NAME
                             )
                             event.processed = True

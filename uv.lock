@@ -136,6 +136,24 @@ wheels = [
 ]
 
 [[package]]
+name = "fast-depends"
+version = "3.0.11"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fc/09/f133c54cc221cd667842f3804d1d84f911d2425bc09a8f224be9cc7ac3be/fast_depends-3.0.11.tar.gz", hash = "sha256:fd609ce6cefbc45258403be93af78225a17f72800207aa88825fff763c33796a", size = 19804, upload-time = "2026-11-03T19:09:17.279Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5c/c7/4e262d4082881cd4b5209a9ba5c7ef3937b65d9357d00640b7ab63b1976b/fast_depends-3.0.11-py3-none-any.whl", hash = "sha256:5c6f2f448e013d7f6555ba1cff27d4c913a4954675631183b48f57411b5566a1", size = 25544, upload-time = "2026-11-03T19:09:15.683Z" },
+]
+
+[package.optional-dependencies]
+pydantic = [
+    { name = "pydantic" },
+]
+
+[[package]]
 name = "fastapi"
 version = "0.162.4"
 source = { registry = "https://pypi.org/simple" }
@@ -151,6 +169,25 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/60/39/7435269dcabb3c1b4ce1b9b03b40dae919415c258e1caa27160c22f55b9a/fastapi-0.162.4.tar.gz", hash = "sha256:4abdb1ef367090678d8bc664631df432ae7a1bfe7709c37547d3606e667650e3", size = 529374, upload-time = "2026-11-10T17:51:17.96Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3f/6b/0537ac682ac728dbe91f75c16683a985d11812f9930f21a35b756d6df629/fastapi-0.162.4-py3-none-any.whl", hash = "sha256:f093bc306d3958278d30ffd14f3834ca3d9b144fbb898ab5c9b652cf6e75f869", size = 151685, upload-time = "2026-11-10T17:51:16.562Z" },
+]
+
+[[package]]
+name = "faststream"
+version = "0.7.8"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "fast-depends", extra = ["pydantic"] },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/87/b6/d15b1c88f1adc3bf11e4e23f8a057e489e2e60a47f7d4b821a3ae264f4c2/faststream-0.7.8.tar.gz", hash = "sha256:9e367d9ba8b59eeafad19f46641b11f20d23a7ed75ea27b2503856a8ae0c075a", size = 392145, upload-time = "2026-10-22T20:50:29.387Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a5/79/daae6f842665756f5fa45683d4762333348c4ad4dba2e9d9f37644717d74/faststream-0.7.8-py3-none-any.whl", hash = "sha256:ffe412278cf116216078dcf29dcec93274994a98d036be2bc388071dff7e259e", size = 618852, upload-time = "2026-10-22T20:50:27.388Z" },
+]
+
+[package.optional-dependencies]
+rabbit = [
+    { name = "aio-pika" },
 ]
 
 [[package]]
@@ -764,6 +801,7 @@ dependencies = [
     { name = "alembic" },
     { name = "asyncpg" },
     { name = "fastapi" },
+    { name = "faststream", extra = ["rabbit"] },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "uvicorn" },
 ]
@@ -774,6 +812,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.20.1" },
     { name = "asyncpg", specifier = ">=0.32.0" },
     { name = "fastapi", specifier = ">=0.162.4" },
+    { name = "faststream", extras = ["rabbit"], specifier = ">=0.7.8" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.1.8" },
     { name = "uvicorn", specifier = ">=0.54.0" },
 ]

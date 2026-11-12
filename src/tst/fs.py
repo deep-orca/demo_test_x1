@@ -1,0 +1,96 @@
+from collections.abc import Awaitable
+import random
+from typing import Any, Callable, override
+from pydantic import BaseModel
+
+from faststream import FastStream, BaseMiddleware
+from faststream.rabbit import RabbitBroker, RabbitExchange, RabbitQueue, ExchangeType
+from faststream.rabbit.message import RabbitMessage
+
+from tst.config import RABBITMQ_URL
+
+MAX_RETRIES = 5
+BASE_DELAY_MS = 1000  # 1 секунда
+MAX_DELAY_MS = 60000  # 60 секунд
+
+
+def calculate_backoff_with_jitter_ms(attempt: int) -> int:
+    exp_delay = min(MAX_DELAY_MS, BASE_DELAY_MS * (2**attempt))
+    return random.randint(0, exp_delay)
+
+
+delayed_exchange = RabbitExchange(
+    name="delayed_exchange",
+    type=ExchangeType.X_DELAYED_MESSAGE,
+    durable=True,
+    arguments={"x-delayed-type": "direct"},
+)
+
+main_queue = RabbitQueue(
+    name="main_queue",
+    durable=True,
+    routing_key="task",
+)
+
+dlq_queue = RabbitQueue(
+    name="dead_letter_queue",
+    durable=True,
+)
+
+
+class DelayedRetryMiddleware(BaseMiddleware):
+    @override
+    async def consume_scope(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self,
+        call_next: Callable[[Any], Awaitable[Any]],
+        msg: RabbitMessage,
+    ):
+        try:
+            # Пытаемся выполнить хендлер подписчика
+            return await call_next(msg)
+        except Exception as exc:
+            headers = dict(msg.headers) if msg.headers else {}
+            retry_count = int(headers.get("x-retry-count", 0))
+
+            if retry_count < MAX_RETRIES:
+                delay_ms = calculate_backoff_with_jitter_ms(retry_count)
+                headers["x-retry-count"] = retry_count + 1
+                headers["x-delay"] = delay_ms
+
+                print(
+                    f"[RETRY] Ошибка: {exc}. Попытка {retry_count + 1}/{MAX_RETRIES} через {delay_ms} мс..."
+                )
+
+                # Публикуем сырое тело сообщения обратно в delayed_exchange
+                await broker.publish(  # pyright: ignore[reportUnusedCallResult]
+                    message=msg.body,
+                    exchange=delayed_exchange,
+                    routing_key="task",
+                    headers=headers,
+                    persist=True,
+                )
+            else:
+                print(
+                    f"[FAILED] Лимит попыток исчерпан ({MAX_RETRIES}). Отправка в DLQ."
+                )
+                headers.pop("x-delay", None)
+
+                await broker.publish(  # pyright: ignore[reportUnusedCallResult]
+                    message=msg.body,
+                    queue=dlq_queue,
+                    headers=headers,
+                    persist=True,
+                )
+
+            return None
+
+
+# 3. Инициализируем брокер с подключенным Middleware
+broker = RabbitBroker(RABBITMQ_URL, middlewares=[DelayedRetryMiddleware])
+app = FastStream(broker)
+
+
+# 4. Схема данных (Pydantic) и чистый бизнес-обработчик
+class TaskPayload(BaseModel):
+    task_id: str
+    action: str
