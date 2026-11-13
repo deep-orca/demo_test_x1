@@ -53,14 +53,12 @@ async def handle_task(data: TaskPayload, logger: Logger) -> None:
 
             await db.flush()
             await db.commit()
-    elif event_data["event"] == "payment.pending":
-        async with aiohttp.ClientSession() as session:
-            async with session.get(event_data["webhook"]) as response:
+    elif event_data["event"] == "payment.webhook":
+        print("WebHook:", event_data["webhook"])
+        async with aiohttp.ClientSession(raise_for_status=True) as session:
+            async with session.post(event_data["webhook"]) as response:
                 print("Status:", response.status)
                 print("Content-type:", response.headers["content-type"])
-
-                response.raise_for_status()
-
                 html = await response.text()
                 print("Body:", html[:100], "...")
 

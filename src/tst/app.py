@@ -11,7 +11,7 @@ from tst.payment_rmq import router
 async def lifespan(_: FastAPI):
     worker_task = asyncio.create_task(outbox_worker())
     yield
-    worker_task.cancel()
+    worker_task.cancel()  # pyright: ignore[reportUnusedCallResult]
 
 
 app = FastAPI(title="Demo SVC", lifespan=lifespan)
