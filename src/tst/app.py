@@ -14,5 +14,5 @@ async def lifespan(_: FastAPI):
     worker_task.cancel()
 
 
-app = FastAPI(title="Платежный сервис + Outbox + Alembic", lifespan=lifespan)
+app = FastAPI(title="Demo SVC", lifespan=lifespan)
 app.include_router(router)

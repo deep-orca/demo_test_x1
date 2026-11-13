@@ -14,7 +14,7 @@ from tst.models import OutboxEventModel, PaymentModel, PaymentStatus
 
 @broker.subscriber(queue=main_queue, exchange=delayed_exchange)
 async def handle_task(data: TaskPayload, logger: Logger) -> None:
-    event_data: dict[str, str] = json.loads(data.action)
+    event_data = json.loads(data.action)
 
     if event_data["event"] == "payment.pending":
         async with async_session() as db:

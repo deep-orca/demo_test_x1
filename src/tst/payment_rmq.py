@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
-from typing_extensions import Any
 
 from tst.ioc import get_db
 from tst.key import verify_api_key
@@ -31,7 +30,7 @@ def get_payload_hash(payload: PaymentCreate) -> str:
     return hashlib.sha256(data_str.encode()).hexdigest()
 
 
-def format_response(payment: PaymentModel) -> dict[str, Any]:
+def format_response(payment: PaymentModel):
     return {
         "payment_id": payment.id,
         "status": payment.status,
