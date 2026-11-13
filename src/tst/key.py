@@ -1,6 +1,6 @@
 import secrets
 from typing import Annotated
-from fastapi import Depends, FastAPI, HTTPException, Security, status
+from fastapi import HTTPException, Security, status
 from fastapi.security import APIKeyHeader
 
 API_KEY_NAME = "X-API-Key"

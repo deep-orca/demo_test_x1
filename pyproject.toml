@@ -1,11 +1,9 @@
 [project]
 name = "tst"
-version = "0.1.0"
+version = "0.0.1"
 description = "Add your description here"
 readme = "README.md"
-authors = [
-    { name = "Egor Dmitrenkov", email = "deep.orca@gmail.com" }
-]
+authors = [{ name = "Egor Dmitrenkov", email = "deep.orca@gmail.com" }]
 requires-python = ">=3.13"
 dependencies = [
     "aio-pika>=10.2.3",

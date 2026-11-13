@@ -3,7 +3,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-# from tst.outbox_worker_pika import outbox_worker
 from tst.outbox_worker_fs import outbox_worker
 from tst.payment_rmq import router
 

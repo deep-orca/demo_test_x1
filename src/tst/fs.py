@@ -10,8 +10,8 @@ from faststream.rabbit.message import RabbitMessage
 from tst.config import RABBITMQ_URL
 
 MAX_RETRIES = 3
-BASE_DELAY_MS = 1000  # 1 секунда
-MAX_DELAY_MS = 60000  # 60 секунд
+BASE_DELAY_MS = 1000
+MAX_DELAY_MS = 60000
 
 
 def calculate_backoff_with_jitter_ms(attempt: int) -> int:

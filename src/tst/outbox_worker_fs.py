@@ -8,7 +8,6 @@ from tst.models import OutboxEventModel
 
 
 async def outbox_worker():
-    print("[Outbox] Starting...")
     await broker.connect()  # pyright: ignore[reportUnusedCallResult]
     await broker.declare_queue(main_queue)  # pyright: ignore[reportUnusedCallResult]
     await broker.declare_queue(dlq_queue)  # pyright: ignore[reportUnusedCallResult]
