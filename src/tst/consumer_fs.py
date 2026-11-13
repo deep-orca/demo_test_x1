@@ -2,69 +2,109 @@ import asyncio
 from datetime import datetime, timezone
 import json
 import random
+from typing import Annotated
 import uuid
 
 import aiohttp
-from faststream import Logger
+from faststream import Context, Depends, Logger
 from sqlalchemy import select
-from tst.fs import TaskPayload, app, broker, delayed_exchange, dlq_queue, main_queue
-from tst.ioc import async_session
+from sqlalchemy.ext.asyncio import AsyncSession
+from tst.fs import (
+    MAX_RETRIES,
+    PermanentError,
+    TaskPayload,
+    TransientError,
+    app,
+    broker,
+    delayed_exchange,
+    dlq_queue,
+    main_queue,
+)
+from tst.ioc import get_db
 from tst.models import OutboxEventModel, PaymentModel, PaymentStatus
 
 
+async def process_pending(ev, payment):
+    await asyncio.sleep(random.randint(2, 5))
+
+    if random.random() < 0.1:
+        raise TransientError(
+            f"{ev["event"]}|{ev["payment_id"]}: Внешний сервис временно недоступен"
+        )
+
+    new_event_data = ev.copy()
+    new_event_data["event"] = "payment.webhook"
+    new_event_data["webhook"] = payment.webhook
+
+    payment.status = PaymentStatus.SUCCEEDED.value
+    payment.processed_at = datetime.now(timezone.utc)
+
+    return OutboxEventModel(
+        id=str(uuid.uuid4()),
+        event_type=new_event_data["event"],
+        payload=json.dumps(new_event_data),
+    )
+
+
+async def process_webhook(ev, payment):
+    print("WebHook:", ev["webhook"])
+    async with aiohttp.ClientSession(raise_for_status=True) as session:
+        async with session.post(ev["webhook"]) as response:
+            print("Status:", response.status)
+            print("Content-type:", response.headers["content-type"])
+            html = await response.text()
+            print("Body:", html[:100], "...")
+
+
+async def get_payment(db: AsyncSession, ev) -> PaymentModel:
+    stmt = (
+        select(PaymentModel)
+        .where(PaymentModel.id == ev["payment_id"])
+        .with_for_update()
+    )
+
+    payment = (await db.execute(stmt)).scalar_one_or_none()
+
+    if not payment:
+        raise PermanentError(f"Платеж {ev['payment_id']} не найден")
+
+    return payment
+
+
 @broker.subscriber(queue=main_queue, exchange=delayed_exchange)
-async def handle_task(data: TaskPayload, logger: Logger) -> None:
-    event_data = json.loads(data.action)
+async def handle_task(
+    data: TaskPayload,
+    logger: Logger,
+    retry: Annotated[int | None, Context("message.headers.x-retry-count", default=0)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    ev = json.loads(data.action)  # pyright: ignore[reportAny]
+    payment = await get_payment(db, ev)
 
-    if event_data["event"] == "payment.pending":
-        async with async_session() as db:
-            stmt = (
-                select(PaymentModel)
-                .where(PaymentModel.id == event_data["payment_id"])
-                .with_for_update()
-            )
-
-            payment = (await db.execute(stmt)).scalar_one_or_none()
-
-            if not payment:
-                raise RuntimeError(f"Платеж {event_data['payment_id']} не найден")
-
-            await asyncio.sleep(random.randint(2, 5))  # ==========================
-
-            if random.random() < 0.1:
-                raise RuntimeError(
-                    f"{event_data["event"]}|{event_data["payment_id"]}: Внешний сервис временно недоступен"
-                )
-
-            new_event_data = event_data.copy()
-            new_event_data["event"] = "payment.webhook"
-            new_event_data["webhook"] = payment.webhook
-
-            payment.status = PaymentStatus.SUCCEEDED.value
-            payment.processed_at = datetime.now(timezone.utc)
-
-            outbox_event = OutboxEventModel(
-                id=str(uuid.uuid4()),
-                event_type=new_event_data["event"],
-                payload=json.dumps(new_event_data),
-            )
-
+    try:
+        if ev["event"] == "payment.pending":
+            outbox_event = await process_pending(ev, payment)
             db.add(outbox_event)
-
             await db.flush()
             await db.commit()
-    elif event_data["event"] == "payment.webhook":
-        print("WebHook:", event_data["webhook"])
-        async with aiohttp.ClientSession(raise_for_status=True) as session:
-            async with session.post(event_data["webhook"]) as response:
-                print("Status:", response.status)
-                print("Content-type:", response.headers["content-type"])
-                html = await response.text()
-                print("Body:", html[:100], "...")
+        elif ev["event"] == "payment.webhook":
+            await process_webhook(ev, payment)
+        logger.info(
+            f"[SUCCESS] Задача #{data.task_id}|{ev["event"]}|{ev["payment_id"]} ({data.action}) успешно выполнена!"
+        )
 
-    logger.info(
-        f"[SUCCESS] Задача #{data.task_id}|{event_data["event"]}|{event_data["payment_id"]} ({data.action}) успешно выполнена!"
-    )
+    except PermanentError:
+        await db.rollback()
+        raise
+    except Exception as e:
+        await db.rollback()
+        if retry == MAX_RETRIES:
+            payment = await get_payment(db, ev)
+            if payment.status == PaymentStatus.PENDING.value:
+                payment.status = PaymentStatus.CANCELED.value
+                await db.flush()
+                await db.commit()
+        raise e
 
 
 @app.after_startup
