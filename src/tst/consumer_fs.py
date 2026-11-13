@@ -14,7 +14,7 @@ from tst.models import OutboxEventModel, PaymentModel, PaymentStatus
 
 @broker.subscriber(queue=main_queue, exchange=delayed_exchange)
 async def handle_task(data: TaskPayload, logger: Logger) -> None:
-    event_data: dict[str, str | float] = json.loads(data.action)
+    event_data: dict[str, str] = json.loads(data.action)
 
     if event_data["event"] == "payment.pending":
         async with async_session() as db:
@@ -55,7 +55,7 @@ async def handle_task(data: TaskPayload, logger: Logger) -> None:
             await db.commit()
     elif event_data["event"] == "payment.pending":
         async with aiohttp.ClientSession() as session:
-            async with session.get("https://api.example.com/data") as response:
+            async with session.get(event_data["webhook"]) as response:
                 print("Status:", response.status)
                 print("Content-type:", response.headers["content-type"])
 

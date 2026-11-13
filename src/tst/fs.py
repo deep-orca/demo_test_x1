@@ -48,7 +48,7 @@ class DelayedRetryMiddleware(BaseMiddleware):
         try:
             return await call_next(msg)
         except Exception as exc:
-            headers = dict(msg.headers) if msg.headers else {}
+            headers = dict(msg.headers or {})
             retry_count = int(headers.get("x-retry-count", 0))
 
             if retry_count < MAX_RETRIES:
